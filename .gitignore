@@ -1,0 +1,56 @@
+# Ignore Node.js dependencies
+node_modules/
+ 
+# Ignore build and output directories
+.next/
+out/
+dist/
+
+# Ignore environment variables
+.env*
+!.env.example  # Keep an example for reference
+
+# Ignore TypeScript build files
+*.tsbuildinfo
+
+# Ignore logs and debugging files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+pnpm-error.log*
+
+# Ignore package manager lock files (optional)
+# If you're using npm, ignore yarn.lock and pnpm-lock.yaml
+yarn.lock
+pnpm-lock.yaml
+
+# Ignore editor and OS-specific files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Ignore testing coverage reports
+coverage/
+jest-cache/
+jest-test-results.json
+
+# Ignore static exports (if generated)
+export/
+
+# Ignore next/image cache
+public/images/cache/
+
+# Ignore TypeScript and ESLint caches
+*.eslintcache
+.cache/
+
+# Ignore Playwright or Cypress test outputs (if used)
+playwright-report/
+cypress/screenshots/
+cypress/videos/
+
+# Ignore Storybook build outputs (if used)
+.storybook-out/

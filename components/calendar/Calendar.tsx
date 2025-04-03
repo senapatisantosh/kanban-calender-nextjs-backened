@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -7,7 +7,7 @@ import {
   KeyboardSensor,
   PointerSensor,
   useSensor,
-  useSensors
+  useSensors,
 } from "@dnd-kit/core";
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 
@@ -43,38 +43,50 @@ const wrapperStyle = {
   padding: "16px",
   background: "hsl(var(--background))",
   borderRadius: "12px",
-  boxShadow: "0 2px 10px rgba(0, 0, 0, 0.05)"
+  boxShadow: "0 2px 10px rgba(0, 0, 0, 0.05)",
 };
 
-export default function Calendar({ calendarDays, onPrevious, onNext, title = "Calendar" }: CalendarProps) {
+export default function Calendar({
+  calendarDays,
+  onPrevious,
+  onNext,
+  title = "Calendar",
+}: CalendarProps) {
   // State to track event positions across days
-  const [days, setDays] = useState(() => {
+  const [days, setDays] = useState<{
+    dayContainers: { [key: string]: string[] };
+    allEvents: { [key: string]: CalendarEvent };
+    dates: { [key: string]: Date };
+    titles: { [key: string]: string };
+  }>({ dayContainers: {}, allEvents: {}, dates: {}, titles: {} });
+
+  useEffect(() => {
+    if (!calendarDays || calendarDays.length === 0) return;
+
     const initialDays: { [key: string]: string[] } = {};
     const events: { [key: string]: CalendarEvent } = {};
     const dates: { [key: string]: Date } = {};
     const titles: { [key: string]: string } = {};
-    
-    // Initialize days and events from calendarDays
-    calendarDays.forEach(day => {
-      initialDays[day.dateKey] = day.events.map(event => event.id);
+
+    calendarDays.forEach((day) => {
+      initialDays[day.dateKey] = day.events.map((event) => event.id);
       dates[day.dateKey] = day.date;
       titles[day.dateKey] = day.title;
-      
-      // Store event details for lookup
-      day.events.forEach(event => {
+
+      day.events.forEach((event) => {
         events[event.id] = event;
       });
     });
-    
-    return { dayContainers: initialDays, allEvents: events, dates, titles };
-  });
-  
+
+    setDays({ dayContainers: initialDays, allEvents: events, dates, titles });
+  }, [calendarDays]);
+
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates
+      coordinateGetter: sortableKeyboardCoordinates,
     })
   );
 
@@ -94,7 +106,9 @@ export default function Calendar({ calendarDays, onPrevious, onNext, title = "Ca
       return id;
     }
 
-    return Object.keys(days.dayContainers).find((key) => days.dayContainers[key].includes(id));
+    return Object.keys(days.dayContainers).find((key) =>
+      days.dayContainers[key].includes(id)
+    );
   }
 
   function handleDragStart(event: any) {
@@ -106,7 +120,7 @@ export default function Calendar({ calendarDays, onPrevious, onNext, title = "Ca
 
   function handleDragOver(event: any) {
     const { active, over } = event;
-    
+
     if (!over) return;
 
     const { id } = active;
@@ -116,7 +130,11 @@ export default function Calendar({ calendarDays, onPrevious, onNext, title = "Ca
     const activeContainer = findContainer(id);
     const overContainer = findContainer(overId);
 
-    if (!activeContainer || !overContainer || activeContainer === overContainer) {
+    if (
+      !activeContainer ||
+      !overContainer ||
+      activeContainer === overContainer
+    ) {
       return;
     }
 
@@ -126,10 +144,10 @@ export default function Calendar({ calendarDays, onPrevious, onNext, title = "Ca
 
       // Find the indexes for the items
       const activeIndex = activeItems.indexOf(id);
-      
+
       // Insert at end of over container by default
       let newIndex = overItems.length;
-      
+
       if (overId in prev.allEvents) {
         // If dropping on a specific event, place after it
         const overIndex = overItems.indexOf(overId);
@@ -142,26 +160,28 @@ export default function Calendar({ calendarDays, onPrevious, onNext, title = "Ca
         dayContainers: {
           ...prev.dayContainers,
           [activeContainer]: [
-            ...prev.dayContainers[activeContainer].filter((item) => item !== id)
+            ...prev.dayContainers[activeContainer].filter(
+              (item) => item !== id
+            ),
           ],
           [overContainer]: [
             ...prev.dayContainers[overContainer].slice(0, newIndex),
             activeItems[activeIndex],
-            ...prev.dayContainers[overContainer].slice(newIndex)
-          ]
-        }
+            ...prev.dayContainers[overContainer].slice(newIndex),
+          ],
+        },
       };
     });
   }
 
   function handleDragEnd(event: any) {
     const { active, over } = event;
-    
+
     if (!over) {
       setActiveId(null);
       return;
     }
-    
+
     const { id } = active;
     const { id: overId } = over;
 
@@ -188,8 +208,12 @@ export default function Calendar({ calendarDays, onPrevious, onNext, title = "Ca
         ...prev,
         dayContainers: {
           ...prev.dayContainers,
-          [overContainer]: arrayMove(prev.dayContainers[overContainer], activeIndex, overIndex)
-        }
+          [overContainer]: arrayMove(
+            prev.dayContainers[overContainer],
+            activeIndex,
+            overIndex
+          ),
+        },
       }));
     }
 
@@ -203,7 +227,10 @@ export default function Calendar({ calendarDays, onPrevious, onNext, title = "Ca
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">{title}</h1>
         {(onPrevious || onNext) && (
-          <NavigationArrows onPrevious={onPrevious || (() => {})} onNext={onNext || (() => {})} />
+          <NavigationArrows
+            onPrevious={onPrevious || (() => {})}
+            onNext={onNext || (() => {})}
+          />
         )}
       </div>
       <div style={wrapperStyle}>
@@ -215,20 +242,26 @@ export default function Calendar({ calendarDays, onPrevious, onNext, title = "Ca
           onDragEnd={handleDragEnd}
         >
           {Object.keys(days.dayContainers).map((dateKey) => (
-            <Day 
-              key={dateKey} 
-              id={dateKey} 
-              items={days.dayContainers[dateKey]} 
+            <Day
+              key={dateKey}
+              id={dateKey}
+              items={days.dayContainers[dateKey]}
               title={getDayTitle(dateKey)}
               getItemContent={getEventContent}
             />
           ))}
-          
+
           <DragOverlay>
-            {activeId ? <Item id={activeId} content={activeEvent?.title} isDragOverlay={true} /> : null}
+            {activeId ? (
+              <Item
+                id={activeId}
+                content={activeEvent?.title}
+                isDragOverlay={true}
+              />
+            ) : null}
           </DragOverlay>
         </DndContext>
       </div>
     </div>
   );
-} 
+}

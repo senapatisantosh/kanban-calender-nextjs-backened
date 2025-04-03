@@ -1,0 +1,15 @@
+DROP TABLE IF EXISTS lessons;
+DROP TABLE IF EXISTS one_offs;
+DROP TABLE IF EXISTS subjects;
+DROP TABLE IF EXISTS events;
+DROP INDEX IF EXISTS idx_subjects_teaching_days;
+DROP INDEX IF EXISTS idx_lessons_subject_id;
+DROP INDEX IF EXISTS idx_events_event_date;
+DROP INDEX IF EXISTS idx_events_event_id_type;
+DROP INDEX IF EXISTS idx_events_event_parent_id;
+DROP INDEX IF EXISTS idx_one_offs_schedule_date;
+DROP FUNCTION IF EXISTS generate_lesson_schedule_dates(INT, TEXT[], DATE);
+DROP FUNCTION IF EXISTS generate_subject_events(UUID);
+DROP FUNCTION IF EXISTS generate_one_off_events(UUID);
+DROP FUNCTION IF EXISTS insert_subject(JSONB);
+DROP FUNCTION IF EXISTS insert_one_off(JSONB);
