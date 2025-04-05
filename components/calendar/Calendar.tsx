@@ -27,10 +27,17 @@ interface CalendarDay {
   events: CalendarEvent[];
 }
 
+export type MoveEvent = {
+  eventId: string;
+  newDate: string;
+  desiredIndex: number;
+};
+
 interface CalendarProps {
   calendarDays: CalendarDay[];
   onPrevious?: () => void;
   onNext?: () => void;
+  onMoveEvent: (event: MoveEvent) => void;
   title?: string;
 }
 
@@ -50,6 +57,7 @@ export default function Calendar({
   calendarDays,
   onPrevious,
   onNext,
+  onMoveEvent,
   title = "Calendar",
 }: CalendarProps) {
   // State to track event positions across days
@@ -216,6 +224,12 @@ export default function Calendar({
         },
       }));
     }
+
+    onMoveEvent({
+      eventId: id,
+      newDate: overContainer,
+      desiredIndex: overIndex + 1,
+    });
 
     setActiveId(null);
   }

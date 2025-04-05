@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import _ from "lodash";
 
 type EventData = {
-  id: string;
   event_id: string;
   event_type: string;
   event_title: string;
@@ -54,7 +53,7 @@ function TransformEventData(
       events: eventList
         .sort((a, b) => a.daily_order_index - b.daily_order_index)
         .map((event) => ({
-          id: event.id,
+          id: event.event_id,
           title: event.event_title,
           event_type: event.event_type,
           event_date: event.event_date,
@@ -68,7 +67,6 @@ function TransformEventData(
 
 export async function GET(req: NextRequest) {
   const user_id = req.headers.get("x-user-id");
-  console.log(user_id);
   const { searchParams } = req.nextUrl;
   const weekStartDate = searchParams.get("weekStartDate");
   const weekEndDate = searchParams.get("weekEndDate");
@@ -96,4 +94,29 @@ export async function GET(req: NextRequest) {
   const transformEventData = TransformEventData(data, startDate, endDate);
 
   return NextResponse.json(transformEventData);
+}
+
+export async function POST(req: NextRequest) {
+  const { eventId, newDate, desiredIndex } = await req.json();
+
+  if (!eventId || !newDate || !desiredIndex) {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  const body = {
+    event_id: eventId,
+    new_date: newDate,
+    desired_index: desiredIndex,
+  };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("move_event", {
+    data: body,
+  });
+
+  if (error) {
+    return NextResponse.json({ error }, { status: 500 });
+  }
+
+  return NextResponse.json(data, { status: 201 });
 }

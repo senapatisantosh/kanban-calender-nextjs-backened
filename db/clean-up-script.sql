@@ -15,3 +15,6 @@ DROP FUNCTION IF EXISTS generate_subject_events(UUID, UUID);
 DROP FUNCTION IF EXISTS generate_one_off_events(UUID, UUID);
 DROP FUNCTION IF EXISTS insert_subject(JSONB);
 DROP FUNCTION IF EXISTS insert_one_off(JSONB);
+DROP FUNCTION IF EXISTS get_user_events_with_titles(JSONB);
+DROP FUNCTION IF EXISTS get_next_order_index(UUID, DATE, INT);
+DROP FUNCTION IF EXISTS move_event(JSONB);

@@ -37,8 +37,6 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 
-
-
 CREATE OR REPLACE FUNCTION generate_subject_events(
     p_subject_id UUID,
     p_user_id UUID,
@@ -88,8 +86,6 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 
-
-
 CREATE OR REPLACE FUNCTION generate_one_off_events(
     p_one_off_id UUID,
     p_user_id UUID
@@ -121,8 +117,6 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 
-
-
 CREATE OR REPLACE FUNCTION insert_subject (data JSONB) RETURNS UUID AS $$
 DECLARE
     new_id uuid;
@@ -148,8 +142,6 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 
-
-
 CREATE OR REPLACE FUNCTION insert_one_off (data JSONB) RETURNS UUID AS $$
 DECLARE
     new_id uuid;
@@ -168,11 +160,8 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 
-
-
 CREATE OR REPLACE FUNCTION get_user_events_with_titles(data JSONB)
 RETURNS TABLE (
-  id UUID,
   event_id UUID,
   event_type TEXT,
   event_date DATE,
@@ -182,7 +171,6 @@ RETURNS TABLE (
 BEGIN
   RETURN QUERY
   SELECT 
-    e.id,
     e.event_id,
     e.event_type,
     e.event_date,
@@ -199,5 +187,117 @@ BEGIN
   WHERE 
     e.user_id = (data->>'user_id')::uuid
     AND e.event_date BETWEEN (data->>'startDate')::DATE AND (data->>'endDate')::DATE;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION get_next_order_index(
+  p_event_id UUID,
+  p_desired_event_date DATE,
+  p_new_order_index INTEGER
+)
+RETURNS INTEGER
+AS $$
+DECLARE
+  v_subject_id UUID;
+  v_lesson_number INTEGER;
+  v_old_order_index INTEGER;
+  v_next_order_index INTEGER;
+  v_max_index_plus_one INTEGER;
+  v_subject_lesson_count INTEGER;
+BEGIN
+  SELECT e.event_parent_id, l.lesson_number, e.daily_order_index
+  INTO v_subject_id, v_lesson_number, v_old_order_index
+  FROM events e
+  LEFT JOIN lessons l ON e.event_id = l.id
+  WHERE e.event_id = p_event_id;
+
+  SELECT e.daily_order_index
+  INTO v_next_order_index
+  FROM events e
+  LEFT JOIN lessons l ON e.event_id = l.id
+  WHERE l.lesson_number > v_lesson_number
+    AND e.event_date = p_desired_event_date
+    AND e.event_parent_id = v_subject_id
+  ORDER BY e.daily_order_index
+  LIMIT 1;
+
+  IF v_next_order_index IS NULL THEN
+    SELECT COUNT(*)
+    INTO v_subject_lesson_count
+    FROM events 
+    WHERE event_date = p_desired_event_date 
+    AND event_parent_id = v_subject_id;
+    IF v_subject_lesson_count = 0 OR p_new_order_index > v_old_order_index THEN
+      RETURN p_new_order_index;
+    ELSE 
+      RETURN v_old_order_index;
+    END IF;
+  ELSE
+    IF v_next_order_index - 1 = 0 THEN
+      RETURN 1;
+    ELSE
+      RETURN v_next_order_index - 1;
+    END IF;
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+CREATE OR REPLACE FUNCTION move_event(data JSONB) RETURNS VOID AS $$
+DECLARE
+  v_old_date DATE;
+  v_old_index INT;
+  v_event_type TEXT;
+  p_event_id UUID;
+  p_new_date DATE;
+  p_desired_index INT;
+BEGIN
+
+  p_event_id := (data->>'event_id')::UUID;
+  p_new_date := (data->>'new_date')::DATE;
+  p_desired_index := (data->>'desired_index')::INT;
+
+  SELECT event_date, daily_order_index, event_type
+  INTO v_old_date, v_old_index, v_event_type
+  FROM events
+  WHERE event_id = p_event_id;
+  
+  IF v_event_type = 'subject' THEN
+    p_desired_index := get_next_order_index(p_event_id, p_new_date, p_desired_index);
+  END IF;
+
+  IF v_old_date <> p_new_date THEN
+    UPDATE events
+    SET daily_order_index = daily_order_index + 1
+    WHERE event_date = p_new_date
+      AND daily_order_index >= p_desired_index;
+
+    UPDATE events
+    SET daily_order_index = daily_order_index - 1
+    WHERE event_date = v_old_date
+      AND daily_order_index > v_old_index;
+
+  ELSE
+    IF p_desired_index > v_old_index THEN
+      UPDATE events
+      SET daily_order_index = daily_order_index - 1
+      WHERE event_date = p_new_date
+        AND daily_order_index > v_old_index
+        AND daily_order_index <= p_desired_index;
+
+    ELSIF p_desired_index < v_old_index THEN
+      UPDATE events
+      SET daily_order_index = daily_order_index + 1
+      WHERE event_date = p_new_date
+        AND daily_order_index >= p_desired_index
+        AND daily_order_index < v_old_index;
+    END IF;
+  END IF;
+
+  UPDATE events
+  SET event_date = p_new_date,
+      daily_order_index = p_desired_index
+  WHERE event_id = p_event_id;
+
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

@@ -23,6 +23,7 @@ import EventForm, {
 import EditSubjectForm from "@/components/subject-form/EditSubjectForm";
 import { useEffect, useState } from "react";
 import axiosClient from "@/utils/axios/axios-client";
+import { MoveEvent } from "@/components/calendar/Calendar";
 
 export default function CalendarPage() {
   const getWeekBoundaries = (weekStartDate: string) => {
@@ -49,6 +50,7 @@ export default function CalendarPage() {
   const [subjectFormData, setSubjectFormData] = useState<SubjectFormData>();
   const [oneOffEventFormData, setoneOffEventFormData] =
     useState<OneOffEventFormData>();
+  const [onMoveEvent, setOnMoveEvent] = useState<MoveEvent>();
   const [loadEventData, setLoadEventData] = useState<boolean>(false);
 
   type EventDataSlim = {
@@ -125,6 +127,21 @@ export default function CalendarPage() {
     }
   };
 
+  useEffect(() => {
+    if (onMoveEvent) {
+      executeOnMoveEvent(onMoveEvent);
+    }
+  }, [onMoveEvent]);
+
+  const executeOnMoveEvent = async (onMoveEvent: MoveEvent) => {
+    try {
+      const { data } = await axiosClient.post("/events", onMoveEvent);
+      setLoadEventData((prev) => !prev);
+    } catch (error) {
+      console.error("Error executing on move event:", error);
+    }
+  };
+
   const handlePrevious = () => {
     setWeekStartDate((previous) => {
       const prevWeek = new Date(previous);
@@ -141,22 +158,26 @@ export default function CalendarPage() {
     });
   };
 
-  const onAddSubject = (formData: SubjectFormData) => {
+  const handleAddSubject = (formData: SubjectFormData) => {
     setSubjectFormData(formData);
   };
 
-  const onAddOneOffEvent = (formData: OneOffEventFormData) => {
+  const handleAddOneOffEvent = (formData: OneOffEventFormData) => {
     setoneOffEventFormData(formData);
+  };
+
+  const handleOnMove = (data: MoveEvent) => {
+    setOnMoveEvent(data);
   };
 
   return (
     <div className="container mx-auto py-8">
       <div className="grid grid-cols-1 gap-4">
-        <SubjectForm title="Add Subject" onAddSubject={onAddSubject} />
+        <SubjectForm title="Add Subject" onAddSubject={handleAddSubject} />
         <EditSubjectForm title="Edit Subject" />
         <EventForm
           title="Add One Off Event"
-          onAddOneOffEvent={onAddOneOffEvent}
+          onAddOneOffEvent={handleAddOneOffEvent}
         />
       </div>
 
@@ -165,6 +186,7 @@ export default function CalendarPage() {
           calendarDays={calendarData}
           onPrevious={handlePrevious}
           onNext={handleNext}
+          onMoveEvent={handleOnMove}
           title="Calendar"
         />
       </div>
