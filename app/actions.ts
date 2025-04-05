@@ -11,6 +11,8 @@ export const signUpAction = async (formData: FormData) => {
   const supabase = await createClient();
   const origin = (await headers()).get("origin");
 
+  console.log(`------Origin-----: ${origin}`);
+
   if (!email || !password) {
     return encodedRedirect(
       "error",

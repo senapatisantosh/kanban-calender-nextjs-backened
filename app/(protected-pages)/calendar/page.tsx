@@ -23,46 +23,6 @@ import EventForm, {
 import EditSubjectForm from "@/components/subject-form/EditSubjectForm";
 import { useEffect, useState } from "react";
 import axiosClient from "@/utils/axios/axios-client";
-// Calendar data with hardcoded dates
-// const calendarData = [
-//   {
-//     dateKey: "2024-05-20",
-//     date: new Date("2024-05-20"),
-//     title: "Mon, May 20",
-//     events: [
-//       { id: "1", title: "Team Meeting" },
-//       { id: "2", title: "Lunch with Client" },
-//       { id: "3", title: "Project Review" },
-//     ],
-//   },
-//   {
-//     dateKey: "2024-05-21",
-//     date: new Date("2024-05-21"),
-//     title: "Tue, May 21",
-//     events: [{ id: "4", title: "Product Demo" }],
-//   },
-//   {
-//     dateKey: "2024-05-22",
-//     date: new Date("2024-05-22"),
-//     title: "Wed, May 22",
-//     events: [
-//       { id: "5", title: "Training Session" },
-//       { id: "6", title: "Conference Call" },
-//     ],
-//   },
-//   {
-//     dateKey: "2024-05-23",
-//     date: new Date("2024-05-23"),
-//     title: "Thu, May 23",
-//     events: [{ id: "7", title: "Workshop" }],
-//   },
-//   {
-//     dateKey: "2024-05-24",
-//     date: new Date("2024-05-24"),
-//     title: "Fri, May 24",
-//     events: [],
-//   },
-// ];
 
 export default function CalendarPage() {
   const getWeekBoundaries = (weekStartDate: string) => {
@@ -115,7 +75,6 @@ export default function CalendarPage() {
       const { weekStart, weekEnd } = getWeekBoundaries(
         weekStartDate.toISOString()
       );
-      console.log(weekStartDate, weekStart, weekEnd);
       const { data } = await axiosClient.get<TransformedEvent[]>(
         `/events?weekStartDate=${weekStart}&weekEndDate=${weekEnd}`
       );

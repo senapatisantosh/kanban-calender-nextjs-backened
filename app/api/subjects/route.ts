@@ -28,6 +28,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ error }, { status: 500 });
   }
 
-  console.log(error);
   return NextResponse.json(data, { status: 201 });
 }
