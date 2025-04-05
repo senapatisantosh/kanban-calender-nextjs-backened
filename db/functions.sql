@@ -41,6 +41,7 @@ $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION generate_subject_events(
     p_subject_id UUID,
+    p_user_id UUID,
     OUT event_count INT
 ) AS $$
 DECLARE
@@ -61,17 +62,18 @@ BEGIN
     event_count := 0;
 
     WITH inserted_events AS (
-        INSERT INTO events (event_id, event_type, event_title, event_date, daily_order_index)
+        INSERT INTO events (event_id, user_id, event_type, event_date, daily_order_index, event_parent_id)
         SELECT 
-            LS.id, 
-            'subject', 
-            LS.title, 
+            LS.id,
+            p_user_id, 
+            'subject',
             GLS.schedule_date,  
             COALESCE(
                 (SELECT MAX(E.daily_order_index) 
                  FROM events E 
                  WHERE E.event_date = GLS.schedule_date), 0
-            ) + ROW_NUMBER() OVER (PARTITION BY GLS.schedule_date ORDER BY LS.lesson_number)
+            ) + ROW_NUMBER() OVER (PARTITION BY GLS.schedule_date ORDER BY LS.lesson_number),
+            p_subject_id
         FROM lessons LS
         LEFT JOIN LATERAL (
             SELECT GLS.lesson_number, GLS.schedule_date
@@ -89,7 +91,8 @@ $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 
 
 CREATE OR REPLACE FUNCTION generate_one_off_events(
-    p_one_off_id UUID
+    p_one_off_id UUID,
+    p_user_id UUID
 ) RETURNS BOOLEAN AS $$
 DECLARE
     v_title TEXT;
@@ -111,8 +114,8 @@ BEGIN
     FROM events 
     WHERE event_date = v_schedule_date;
 
-    INSERT INTO events (event_id, event_type, event_title, event_date, daily_order_index)
-    VALUES (p_one_off_id, 'one_off', v_title, v_schedule_date, p_max_daily_order_index + 1);
+    INSERT INTO events (event_id, user_id, event_type, event_date, daily_order_index)
+    VALUES (p_one_off_id, p_user_id, 'one_off', v_schedule_date, p_max_daily_order_index + 1);
 
     RETURN TRUE;
 END;
@@ -125,8 +128,9 @@ DECLARE
     new_id uuid;
     subject_name TEXT;
 BEGIN
-    INSERT INTO subjects (name, teaching_days, lesson_count)
+    INSERT INTO subjects (user_id, name, teaching_days, lesson_count)
     VALUES (
+        (data->>'user_id')::uuid,
         data->>'name',
         ARRAY(SELECT jsonb_array_elements_text(data->'teaching_days')),
         (data->>'lesson_count')::INTEGER
@@ -134,18 +138,15 @@ BEGIN
     RETURNING id, name INTO new_id, subject_name;
 
     FOR lesson_num IN 1..(data->>'lesson_count')::INTEGER LOOP
-        INSERT INTO lessons (subject_id, lesson_number, title)
-        VALUES (new_id, lesson_num, subject_name || ' - ' || lesson_num);
+        INSERT INTO lessons (subject_id, lesson_number)
+        VALUES (new_id, lesson_num);
     END LOOP;
 
-    PERFORM generate_subject_events(new_id);
+    PERFORM generate_subject_events(new_id, (data->>'user_id')::uuid);
 
     RETURN new_id;
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-
-
-
 
 
 
@@ -153,15 +154,50 @@ CREATE OR REPLACE FUNCTION insert_one_off (data JSONB) RETURNS UUID AS $$
 DECLARE
     new_id uuid;
 BEGIN
-    INSERT INTO one_offs (title, schedule_date)
+    INSERT INTO one_offs (user_id, title, schedule_date)
     VALUES (
+        (data->>'user_id')::uuid,
         data->>'title',
         (data->>'schedule_date')::DATE
     )
     RETURNING id INTO new_id;
 
-    PERFORM generate_one_off_events(new_id);
+    PERFORM generate_one_off_events(new_id, (data->>'user_id')::uuid);
 
     RETURN new_id;
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
+
+
+
+CREATE OR REPLACE FUNCTION get_user_events_with_titles(data JSONB)
+RETURNS TABLE (
+  id UUID,
+  event_id UUID,
+  event_type TEXT,
+  event_date DATE,
+  daily_order_index INT,
+  event_title TEXT
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    e.id,
+    e.event_id,
+    e.event_type,
+    e.event_date,
+    e.daily_order_index,
+    CASE
+      WHEN e.event_type = 'one_off' THEN o.title
+      WHEN e.event_type = 'subject' THEN CONCAT(s.name, ' - ', l.lesson_number)
+      ELSE NULL
+    END AS event_title
+  FROM events e
+  LEFT JOIN one_offs o ON e.event_type = 'one_off' AND e.event_id = o.id
+  LEFT JOIN lessons l ON e.event_type = 'subject' AND e.event_id = l.id
+  LEFT JOIN subjects s ON e.event_type = 'subject' AND e.event_parent_id = s.id
+  WHERE 
+    e.user_id = (data->>'user_id')::uuid
+    AND e.event_date BETWEEN (data->>'startDate')::DATE AND (data->>'endDate')::DATE;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
