@@ -13,8 +13,16 @@ export async function varifyToken(request: NextRequest) {
   const supabase = await createClient();
 
   const { data, error } = await supabase.auth.getUser(token);
+
   if (error || !data.user)
     return NextResponse.json({ error: "Invalid token" }, { status: 403 });
 
-  return NextResponse.next();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-user-id", data.user.id);
+
+  return NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
 }

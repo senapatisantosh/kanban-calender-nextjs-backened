@@ -100,7 +100,7 @@ export default function CalendarPage() {
         subjectFormData
       );
       if (!data) throw new Error("Failed to add Subject");
-      setLoadEventData(true);
+      setLoadEventData((prev) => !prev);
     } catch (error) {
       console.error("Error adding Subject:", error);
     }
@@ -119,7 +119,7 @@ export default function CalendarPage() {
         oneOffEventFormData
       );
       if (!data) throw new Error("Failed to add One Off event");
-      setLoadEventData(true);
+      setLoadEventData((prev) => !prev);
     } catch (error) {
       console.error("Error adding One Off event:", error);
     }

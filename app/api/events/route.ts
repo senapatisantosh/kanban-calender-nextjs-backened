@@ -1,5 +1,5 @@
 import { createClient } from "@/utils/supabase/server";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import _ from "lodash";
 
 type EventData = {
@@ -66,8 +66,10 @@ function TransformEventData(
   return results;
 }
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
+export async function GET(req: NextRequest) {
+  const user_id = req.headers.get("x-user-id");
+  console.log(user_id);
+  const { searchParams } = req.nextUrl;
   const weekStartDate = searchParams.get("weekStartDate");
   const weekEndDate = searchParams.get("weekEndDate");
 
@@ -80,25 +82,18 @@ export async function GET(req: Request) {
 
   const startDate = new Date(weekStartDate);
   const endDate = new Date(weekEndDate);
+  const body = { user_id, startDate, endDate };
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("events")
-    .select(
-      "id, event_id, event_type, event_title, event_date, daily_order_index"
-    )
-    .gte("event_date", startDate.toISOString().split("T")[0])
-    .lte("event_date", endDate.toISOString().split("T")[0]);
+  const { data, error } = await supabase.rpc("get_user_events_with_titles", {
+    data: body,
+  });
 
   if (error) {
     return NextResponse.json({ error }, { status: 500 });
   }
 
-  const transformEventData = TransformEventData(
-    data,
-    startDate,
-    endDate
-  );
+  const transformEventData = TransformEventData(data, startDate, endDate);
 
   return NextResponse.json(transformEventData);
 }
