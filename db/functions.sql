@@ -1,12 +1,12 @@
 CREATE OR REPLACE FUNCTION generate_lesson_schedule_dates(
-    p_lesson_count INT,
+    p_lesson_count INTEGER,
     p_teaching_days TEXT[],       
     p_start_date DATE          
-) RETURNS TABLE (lesson_number INT, schedule_date DATE) AS $$
+) RETURNS TABLE (lesson_number INTEGER, schedule_date DATE) AS $$
 DECLARE
-    iso_days INT[];         
+    iso_days INTEGER[];         
     next_date DATE;         
-    counter INT := 1;       
+    counter INTEGER := 1;       
 BEGIN
     SELECT ARRAY(
         SELECT CASE 
@@ -40,11 +40,11 @@ $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION generate_subject_events(
     p_subject_id UUID,
     p_user_id UUID,
-    OUT event_count INT
+    OUT event_count INTEGER
 ) AS $$
 DECLARE
     v_teaching_days TEXT[];
-    v_lesson_count INT;
+    v_lesson_count INTEGER;
 BEGIN
     SELECT teaching_days, lesson_count
     INTO v_teaching_days, v_lesson_count
@@ -93,7 +93,7 @@ CREATE OR REPLACE FUNCTION generate_one_off_events(
 DECLARE
     v_title TEXT;
     v_schedule_date DATE;
-    p_max_daily_order_index INT;
+    p_max_daily_order_index INTEGER;
 BEGIN
     SELECT title, schedule_date
     INTO v_title, v_schedule_date
@@ -165,7 +165,7 @@ RETURNS TABLE (
   event_id UUID,
   event_type TEXT,
   event_date DATE,
-  daily_order_index INT,
+  daily_order_index INTEGER,
   event_title TEXT
 ) AS $$
 BEGIN
@@ -200,13 +200,11 @@ AS $$
 DECLARE
   v_subject_id UUID;
   v_lesson_number INTEGER;
-  v_old_order_index INTEGER;
+  v_prev_order_index INTEGER;
   v_next_order_index INTEGER;
-  v_max_index_plus_one INTEGER;
-  v_subject_lesson_count INTEGER;
 BEGIN
-  SELECT e.event_parent_id, l.lesson_number, e.daily_order_index
-  INTO v_subject_id, v_lesson_number, v_old_order_index
+  SELECT e.event_parent_id, l.lesson_number
+  INTO v_subject_id, v_lesson_number
   FROM events e
   LEFT JOIN lessons l ON e.event_id = l.id
   WHERE e.event_id = p_event_id;
@@ -221,47 +219,123 @@ BEGIN
   ORDER BY e.daily_order_index
   LIMIT 1;
 
-  IF v_next_order_index IS NULL THEN
-    SELECT COUNT(*)
-    INTO v_subject_lesson_count
-    FROM events 
-    WHERE event_date = p_desired_event_date 
-    AND event_parent_id = v_subject_id;
-    IF v_subject_lesson_count = 0 OR p_new_order_index > v_old_order_index THEN
-      RETURN p_new_order_index;
-    ELSE 
-      RETURN v_old_order_index;
-    END IF;
-  ELSE
-    IF v_next_order_index - 1 = 0 THEN
-      RETURN 1;
-    ELSE
+  SELECT e.daily_order_index
+  INTO v_prev_order_index
+  FROM events e
+  LEFT JOIN lessons l ON e.event_id = l.id
+  WHERE l.lesson_number < v_lesson_number
+    AND e.event_date = p_desired_event_date
+    AND e.event_parent_id = v_subject_id
+  ORDER BY e.daily_order_index DESC
+  LIMIT 1;
+
+  IF v_prev_order_index IS NOT NULL AND v_next_order_index IS NOT NULL THEN
+    IF p_new_order_index <= v_prev_order_index THEN
+      RETURN v_prev_order_index + 1;
+    ELSIF p_new_order_index >= v_next_order_index THEN
       RETURN v_next_order_index - 1;
+    ELSE
+      RETURN p_new_order_index;
     END IF;
+
+  ELSIF v_prev_order_index IS NOT NULL THEN
+    IF p_new_order_index <= v_prev_order_index THEN
+      RETURN v_prev_order_index + 1;
+    ELSE
+      RETURN p_new_order_index;
+    END IF;
+
+  ELSIF v_next_order_index IS NOT NULL THEN
+    IF p_new_order_index >= v_next_order_index THEN
+      RETURN v_next_order_index - 1;
+    ELSE
+      RETURN p_new_order_index;
+    END IF;
+
+  ELSE
+    RETURN p_new_order_index;
   END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+CREATE OR REPLACE FUNCTION valid_move(
+  p_event_id UUID,
+  p_new_date DATE
+) RETURNS BOOLEAN AS $$
+DECLARE
+  v_subject_id UUID;
+  v_event_type TEXT;
+  v_current_event_date DATE;
+  v_current_lesson_number INTEGER;
+BEGIN
+  IF p_new_date < CURRENT_DATE THEN
+    RETURN FALSE;
+  END IF;
 
-CREATE OR REPLACE FUNCTION move_event(data JSONB) RETURNS VOID AS $$
+  SELECT e.event_parent_id, l.lesson_number, e.event_date, e.event_type
+  INTO v_subject_id, v_current_lesson_number, v_current_event_date, v_event_type
+  FROM events e
+  LEFT JOIN lessons l ON e.event_id = l.id
+  WHERE e.event_id = p_event_id;
+
+  IF v_event_type = 'one_off' THEN
+    RETURN TRUE;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM events e
+    JOIN lessons l ON e.event_id = l.id
+    WHERE e.event_parent_id = v_subject_id
+      AND e.event_id <> p_event_id
+      AND l.lesson_number > v_current_lesson_number
+      AND e.event_date < p_new_date
+  ) THEN
+    RETURN FALSE;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM events e
+    JOIN lessons l ON e.event_id = l.id
+    WHERE e.event_parent_id = v_subject_id
+      AND e.event_id <> p_event_id
+      AND l.lesson_number < v_current_lesson_number
+      AND e.event_date > p_new_date
+  ) THEN
+    RETURN FALSE;
+  END IF;
+
+  RETURN TRUE;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION move_event(data JSONB) RETURNS BOOLEAN AS $$
 DECLARE
   v_old_date DATE;
-  v_old_index INT;
+  v_old_index INTEGER;
   v_event_type TEXT;
   p_event_id UUID;
   p_new_date DATE;
-  p_desired_index INT;
+  p_desired_index INTEGER;
+  v_is_valid BOOLEAN;
 BEGIN
 
   p_event_id := (data->>'event_id')::UUID;
   p_new_date := (data->>'new_date')::DATE;
-  p_desired_index := (data->>'desired_index')::INT;
+  p_desired_index := (data->>'desired_index')::INTEGER;
+
+  v_is_valid := valid_move(p_event_id, p_new_date);
+
+  IF NOT valid_move(p_event_id, p_new_date) THEN
+    RETURN FALSE;
+  END IF;
 
   SELECT event_date, daily_order_index, event_type
   INTO v_old_date, v_old_index, v_event_type
   FROM events
   WHERE event_id = p_event_id;
-  
+
   IF v_event_type = 'subject' THEN
     p_desired_index := get_next_order_index(p_event_id, p_new_date, p_desired_index);
   END IF;
@@ -298,6 +372,8 @@ BEGIN
   SET event_date = p_new_date,
       daily_order_index = p_desired_index
   WHERE event_id = p_event_id;
+
+  RETURN TRUE;
 
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
