@@ -282,6 +282,15 @@ BEGIN
     RETURN TRUE;
   END IF;
 
+  IF NOT EXISTS (
+    SELECT 1 
+    FROM subjects 
+    WHERE id = v_subject_id 
+      AND to_char(p_new_date, 'Dy') = Any (teaching_days)
+  ) THEN
+    RETURN FALSE;
+  END IF;
+
   IF EXISTS (
     SELECT 1
     FROM events e
