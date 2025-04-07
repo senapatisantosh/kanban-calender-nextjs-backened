@@ -21,6 +21,18 @@ CREATE TABLE subjects (
 CREATE INDEX idx_subjects_user_id ON subjects (user_id);
 CREATE INDEX idx_subjects_teaching_days ON subjects USING GIN (teaching_days);
 
+CREATE TABLE subject_history (
+  history_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  subject_id UUID NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  teaching_days TEXT[] NOT NULL,
+  lesson_count INTEGER,
+  effective_date DATE NOT NULL,
+  expiry_date DATE,
+  current_flag BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 
 CREATE TABLE lessons (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

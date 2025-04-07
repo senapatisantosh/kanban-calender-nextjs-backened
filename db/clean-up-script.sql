@@ -1,6 +1,7 @@
 DROP TABLE IF EXISTS lessons;
 DROP TABLE IF EXISTS one_offs;
 DROP TABLE IF EXISTS subjects;
+DROP TABLE IF EXISTS subject_history;
 DROP TABLE IF EXISTS events;
 DROP INDEX IF EXISTS idx_one_offs_user_id;
 DROP INDEX IF EXISTS idx_one_offs_schedule_date;
